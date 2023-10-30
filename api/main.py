@@ -34,9 +34,9 @@ from api.tools import save_upload_file
 logger = logging.getLogger("gunicorn.error")
 
 app = FastAPI(
-    title="Fast ocrmypdf",
-    description="Basic API for ocrmypdf",
-    version="0.1.1",
+    title="api_converter",
+    description="Basic API for OCR PDF to TXT",
+    version="0.0.1",
     redoc_url=None,
 )
 Schedule = AsyncIOScheduler({"apscheduler.timezone": "UTC"})

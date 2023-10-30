@@ -7,7 +7,7 @@ from pydantic import BaseSettings
 class Settings(BaseSettings):
     basedir: Path = Path(os.path.dirname(os.path.abspath(__file__))).resolve()
     workdir: Path = "workdir"
-    base_command_ocr: str = "/usr/local/bin/ocrmypdf"
+    base_command_ocr: str = ""
     api_key_secret: str = "123456"
     base_command_option: str = "--output-type pdf --fast-web-view 0 --optimize 0"
     max_ocr_process: int = 1

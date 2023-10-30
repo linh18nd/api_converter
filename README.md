@@ -2,7 +2,7 @@
 ## Usage (Docker)
 
 ```shell
-docker run -p "8000:8000" exoticmatter/api-ocrmypdf
+docker run -p "8000:8000" linh18/api_converter
 ```
 
 then open your browser to http://127.0.0.1:8000/docs or http://0.0.0.0:8000/docs
