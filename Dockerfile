@@ -31,7 +31,7 @@ RUN apt-get update && \
 
 WORKDIR /app
 
-RUN pip3 install ocrmypdf==12.0.0
+RUN pip3 install ocrmypdf
 
 COPY requirements.txt /app/requirements.txt
 RUN pip3 install -r requirements.txt
