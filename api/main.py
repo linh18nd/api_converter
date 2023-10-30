@@ -155,7 +155,7 @@ def get_doc_txt(pid: UUID, api_key: APIKey = Depends(check_api_key)):
 
 
 @app.post(
-    "/ocr", response_model=Document, status_code=202,
+    "/ocr", response_model=Document, status_code=200,
 )
 async def ocr(
     background_tasks: BackgroundTasks,

@@ -85,9 +85,9 @@ class TestMain:
 
     @pytest.mark.parametrize(
         "test_value,expected",
-        [("fra", 202), ("eng", 202), pytest.param("xxx", 400, marks=pytest.mark.xfail)],
+        [("fra", 200), ("eng", 200), pytest.param("xxx", 400, marks=pytest.mark.xfail)],
     )
-    @freeze_time("2021-04-01 12:30:00")
+    @freeze_time("2001-04-01 12:30:00")
     def test_ocr(
         self, monkeypatch, mocker, client, document_upload, test_value, expected
     ):
@@ -116,7 +116,7 @@ class TestMain:
         spy_uuid4.assert_called_once()
 
         args, _ = mock_save_upload_file.call_args
-        x_now = datetime(year=2021, month=4, day=1, hour=12, minute=30)
+        x_now = datetime(year=2001, month=4, day=1, hour=12, minute=30)
         x_expire = x_now + timedelta(hours=1)
         x_filename = f"{spy_uuid4.spy_return}_{int(x_expire.timestamp())}"
         x_input = "workdir" / Path(f"i_{x_filename}.pdf")
