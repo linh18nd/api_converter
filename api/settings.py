@@ -14,5 +14,4 @@ class Settings(BaseSettings):
     document_expire_hour: int = 1
     enable_wsl_compat: bool = False
 
-
 config = Settings()

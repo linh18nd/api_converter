@@ -1,5 +1,6 @@
 .idea
 api/workdir
 workdir
+*/__pycache__
 *.pdf
 *.key
