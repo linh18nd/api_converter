@@ -125,22 +125,16 @@ def get_doc_detail(pid: UUID, api_key: APIKey = Depends(check_api_key)):
 
 
 @app.get("/ocr/{pid}/pdf")
-@app.get("/ocr/{pid}/pdf")
-def get_doc_pdf(pid: UUID, api_key: str = Depends(check_api_key)):
+def get_doc_pdf(pid: UUID, api_key: APIKey = Depends(check_api_key)):
     if pid in documents:
         output_doc = documents[pid].output
 
         if output_doc.resolve().exists():
-            # Đọc dữ liệu tệp PDF
-            with open(output_doc.resolve(), "rb") as pdf_file:
-                pdf_data = pdf_file.read()
-            
-            # Chuyển dữ liệu PDF thành Uint8List
-            pdf_data_uint8 = [byte for byte in pdf_data]
-
-            response = Response(content=pdf_data_uint8, media_type="application/pdf")
-            response.headers["Content-Disposition"] = f"attachment; filename={pid}.pdf"
-            return response
+            return FileResponse(
+                str(output_doc.resolve()),
+                headers={"Content-Type": "application/pdf"},
+                filename=f"{pid}.pdf",
+            )
 
     raise HTTPException(status_code=404)
 
