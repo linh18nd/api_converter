@@ -2,11 +2,11 @@
 ## Usage (Docker)
 
 ```shell
-docker build -t linh18/api_converter:1.0.2 .
+docker build -t linh18/api_converter:1.0.4 .
 ```
 
 ```shell
-docker run -p "8000:8000" linh18/api_converter:1.0.2
+docker run -p "80:80" linh18/api_converter:1.0.4
 ```
 
 then open your browser to http://127.0.0.1:8000/docs or http://0.0.0.0:8000/docs
@@ -16,7 +16,7 @@ then open your browser to http://127.0.0.1:8000/docs or http://0.0.0.0:8000/docs
 There are some settings which can be configured via environment variable. The list is available in `settings.py`. Simply
 apply upper case to the name of the setting.
 
-## Development
+## Developmentdocker images
 
 ```shell
 pip install -r requirements.txt
