@@ -64,7 +64,7 @@ def clean_docs():
             d.delete_all_files()
 
 
-def do_ocr(_doc: Document):
+async def do_ocr(_doc: Document):
     pool_ocr.acquire()
     _doc.ocr(config.enable_wsl_compat)
     pool_ocr.release()
@@ -188,6 +188,6 @@ async def ocr(
     )
     documents[pid].save_state()
 
-    background_tasks.add_task(do_ocr, documents[pid])
+    await do_ocr(documents[pid])
 
     return documents[pid]
