@@ -2,11 +2,12 @@
 ## Usage (Docker)
 
 ```shell
-docker build -t linh18/api_converter:1.0.4 .
+docker build -t linh18/api_converter:1.0.5 .
 ```
 
 ```shell
-docker run -p "80:80" linh18/api_converter:1.0.4
+docker pull linh18/api_converter:1.0.5
+docker run -p "8080:8080" linh18/api_converter:1.0.5
 ```
 
 then open your browser to http://127.0.0.1:8000/docs or http://0.0.0.0:8000/docs
