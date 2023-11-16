@@ -22,7 +22,7 @@ from fastapi import (
     Query,
 )
 from fastapi.openapi.models import APIKey
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from pydantic import ValidationError
 from starlette.status import HTTP_403_FORBIDDEN
@@ -139,20 +139,27 @@ def get_doc_pdf(pid: UUID, api_key: APIKey = Depends(check_api_key)):
     raise HTTPException(status_code=404)
 
 
-@app.get("/ocr/{pid}/txt")
+
+@app.get("/ocr/{pid}/text")
 def get_doc_txt(pid: UUID, api_key: APIKey = Depends(check_api_key)):
     if pid in documents:
         output_doc_txt = documents[pid].output_txt
 
         if output_doc_txt.resolve().exists():
-            return FileResponse(
-                str(output_doc_txt.resolve()),
-                headers={"Content-Type": "text/plain; charset=utf-8"},
-                filename=f"{pid}.txt",
+            # Read content from the txt file
+            with open(output_doc_txt.resolve(), 'r', encoding='utf-8') as file:
+                txt_content = file.read()
+
+            # Convert the content to a Map<String, String>
+            result_map = {"pid": str(pid), "data": txt_content}
+
+            # Return the Map as JSONResponse
+            return JSONResponse(
+                content=result_map,
+                headers={"Content-Type": "application/json; charset=utf-8"},
             )
 
     raise HTTPException(status_code=404)
-
 
 @app.post(
     "/ocr", response_model=Document, status_code=200,
@@ -162,6 +169,7 @@ async def ocr(
     lang: Optional[Set[str]] = Query([Lang.eng]),
     file: UploadFile = File(...),
     api_key: APIKey = Depends(check_api_key),
+
 ):
     pid = uuid.uuid4()
     now = datetime.now()
@@ -184,6 +192,7 @@ async def ocr(
             "status": "received",
             "created": now,
             "expire": expire,
+         
         }
     )
     documents[pid].save_state()

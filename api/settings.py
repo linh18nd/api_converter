@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     workdir: Path = "/Users/linhth1/Documents/python/api_converter/workdir"
     base_command_ocr: str = "/usr/local/bin/ocrmypdf"
     api_key_secret: str = "123456"
-    base_command_option: str = "--output-type pdf --fast-web-view 0 --optimize 0"
+    base_command_option: str = "--output-type pdf --fast-web-view 0 --optimize 0 --force-ocr"
     max_ocr_process: int = 15
     document_expire_hour: int = 1
     enable_wsl_compat: bool = False
