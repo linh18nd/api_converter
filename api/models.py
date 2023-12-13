@@ -36,7 +36,6 @@ class Document(BaseModel):
         self.processing = datetime.now()
         self.save_state()
 
-        # Hack for user using OCRmyPDF inside WSL (Windows)
         output_txt_path = (
             special_win_wslpath(self.output_txt)
             if wsl
@@ -80,12 +79,3 @@ class Document(BaseModel):
         with open(self.output_json, "w") as ff:
             ff.write(self.json())
 
-    def delete_all_files(self):
-        if self.input.exists():
-            self.input.unlink()
-        if self.output.exists():
-            self.output.unlink()
-        if self.output_json.exists():
-            self.output_json.unlink()
-        if self.output_txt.exists():
-            self.output_txt.unlink()

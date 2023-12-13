@@ -1,3 +1,4 @@
+from io import BytesIO
 import logging
 import os
 import secrets
@@ -8,6 +9,8 @@ from pathlib import Path
 from threading import BoundedSemaphore
 from typing import Optional, Dict, Set
 from uuid import UUID
+from fastapi.responses import FileResponse, StreamingResponse
+from docx import Document as DocxDocument
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import (
@@ -24,10 +27,13 @@ from fastapi import (
 from fastapi.openapi.models import APIKey
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import APIKeyHeader
-from pydantic import ValidationError
 from starlette.status import HTTP_403_FORBIDDEN
-
 from api.models import Document, Lang
+
+
+
+
+
 from api.settings import config
 from api.tools import save_upload_file
 
@@ -36,7 +42,7 @@ logger = logging.getLogger("gunicorn.error")
 app = FastAPI(
     title="api_converter",
     description="Basic API for OCR PDF to TXT",
-    version="0.0.1",
+    version="0.0.3",
     redoc_url=None,
 )
 Schedule = AsyncIOScheduler({"apscheduler.timezone": "UTC"})
@@ -54,45 +60,14 @@ if not workdir.exists():
     workdir.mkdir()
 
 
-def clean_docs():
-    logger.info("Cleaning documents")
-    now = datetime.now()
-    for key, document in documents.items():
-        d = Document.parse_obj(document)
-        if d.expire < now:
-            logger.info(f"Deleting expired document {key}")
-            d.delete_all_files()
-
 
 async def do_ocr(_doc: Document):
     pool_ocr.acquire()
     _doc.ocr(config.enable_wsl_compat)
     pool_ocr.release()
-
+    
 
 api_key_header = APIKeyHeader(name="X-API-KEY")
-
-
-@app.on_event("startup")
-async def startup_event():
-    now = datetime.now()
-    for f_json in (script_directory / workdir).glob("o_*_*.json"):
-        try:
-            d = Document.parse_file(f_json)
-        except ValidationError as e:
-            logging.exception(e)
-        else:
-            if d.pid not in documents:
-                if d.expire > now and d.output.exists():
-                    documents[d.pid] = d
-                    logger.info(f"Loaded existing document {d.pid}")
-                else:
-                    logger.info(f"Deleting expired document {d.pid}")
-                    d.delete_all_files()
-
-    Schedule.add_job(
-        clean_docs, "interval", minutes=1, id="cleaning_docs_task", coalesce=True
-    )
 
 
 async def check_api_key(x_api_key: str = Security(api_key_header)):
@@ -140,23 +115,40 @@ def get_doc_pdf(pid: UUID, api_key: APIKey = Depends(check_api_key)):
 
 
 
-@app.get("/ocr/{pid}/text")
+@app.get("/ocr/{pid}/txt")
 def get_doc_txt(pid: UUID, api_key: APIKey = Depends(check_api_key)):
     if pid in documents:
         output_doc_txt = documents[pid].output_txt
 
         if output_doc_txt.resolve().exists():
-            # Read content from the txt file
-            with open(output_doc_txt.resolve(), 'r', encoding='utf-8') as file:
-                txt_content = file.read()
+            return FileResponse(
+                str(output_doc_txt.resolve()),
+                headers={"Content-Type": "text/plain; charset=utf-8"},
+                filename=f"{pid}.txt",
+            )
 
-            # Convert the content to a Map<String, String>
-            result_map = {"pid": str(pid), "data": txt_content}
+    raise HTTPException(status_code=404)
 
-            # Return the Map as JSONResponse
-            return JSONResponse(
-                content=result_map,
-                headers={"Content-Type": "application/json; charset=utf-8"},
+@app.get("/ocr/{pid}/docx")
+def get_doc_docx(pid: UUID, api_key: APIKey = Depends(check_api_key)):
+    if pid in documents:
+        output_doc_txt = documents[pid].output_txt
+
+        if output_doc_txt.resolve().exists():
+            doc = DocxDocument()
+            with open(str(output_doc_txt.resolve()), 'r', encoding='utf-8') as txt_file:
+                for line in txt_file:
+                    doc.add_paragraph(line.strip())
+
+            docx_content = BytesIO()
+            doc.save(docx_content)
+
+            docx_content.seek(0)
+
+            return StreamingResponse(
+                content=docx_content,
+                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                headers={"Content-Disposition": f"attachment; filename={pid}.docx"},
             )
 
     raise HTTPException(status_code=404)
@@ -192,7 +184,6 @@ async def ocr(
             "status": "received",
             "created": now,
             "expire": expire,
-         
         }
     )
     documents[pid].save_state()
