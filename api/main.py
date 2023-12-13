@@ -168,6 +168,26 @@ def search_files(query: str = Query(..., title="Search Query"), api_key: APIKey 
 
     return matching_pdfs
 
+@app.delete("/ocr/{pid}")
+def delete_doc(pid: UUID, api_key: APIKey = Depends(check_api_key)):
+    if pid in documents:
+        # Xoá tệp đầu ra và các tệp liên quan khác nếu cần
+        output_doc = documents[pid].output
+        output_doc_json = documents[pid].output_json
+        output_doc_txt = documents[pid].output_txt
+
+        # Kiểm tra và xoá tệp nếu tồn tại
+        for file_path in [output_doc, output_doc_json, output_doc_txt]:
+            if file_path.resolve().exists():
+                file_path.unlink()
+
+        # Xoá tài liệu khỏi danh sách
+        del documents[pid]
+
+        return {"status": "success", "message": f"Document {pid} deleted successfully"}
+
+    raise HTTPException(status_code=404, detail="Document not found")
+
 
 @app.post(
     "/ocr", response_model=Document, status_code=200,
