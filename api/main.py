@@ -16,6 +16,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import (
     FastAPI,
     File,
+    Form,
     UploadFile,
     HTTPException,
     BackgroundTasks,
@@ -28,10 +29,8 @@ from fastapi.openapi.models import APIKey
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from starlette.status import HTTP_403_FORBIDDEN
+from api.database import save_document_to_database
 from api.models import Document, Lang
-
-
-
 
 
 from api.settings import config
@@ -56,16 +55,25 @@ workdir = config.workdir
 script_directory = Path(os.path.dirname(os.path.abspath(__file__))).resolve()
 expiration_delta = timedelta(hours=config.document_expire_hour)
 
-if not workdir.exists():
-    workdir.mkdir()
-
-
 
 async def do_ocr(_doc: Document):
     pool_ocr.acquire()
     _doc.ocr(config.enable_wsl_compat)
     pool_ocr.release()
-    
+
+    file_content = _doc.output_txt.read_text(encoding="utf-8")
+
+    document_data = {
+        "id": _doc.pid,
+        "lang": _doc.lang,
+        "created_at": _doc.created,
+        "pdf_path": str(_doc.output),
+        "ocr_content": file_content,
+        "file_name": _doc.file_name,
+    }
+
+    save_document_to_database(document_data)
+
 
 api_key_header = APIKeyHeader(name="X-API-KEY")
 
@@ -92,103 +100,6 @@ def status():
     return {"status": "ok", "version_ocr": ocrmypdf.strip()}
 
 
-@app.get("/ocr/{pid}", response_model=Document)
-def get_doc_detail(pid: UUID, api_key: APIKey = Depends(check_api_key)):
-    if pid in documents:
-        return documents[pid]
-    raise HTTPException(status_code=404)
-
-
-@app.get("/ocr/{pid}/pdf")
-def get_doc_pdf(pid: UUID, api_key: APIKey = Depends(check_api_key)):
-    if pid in documents:
-        output_doc = documents[pid].output
-
-        if output_doc.resolve().exists():
-            return FileResponse(
-                str(output_doc.resolve()),
-                headers={"Content-Type": "application/pdf"},
-                filename=f"{pid}.pdf",
-            )
-
-    raise HTTPException(status_code=404)
-
-
-
-@app.get("/ocr/{pid}/txt")
-def get_doc_txt(pid: UUID, api_key: APIKey = Depends(check_api_key)):
-    if pid in documents:
-        output_doc_txt = documents[pid].output_txt
-
-        if output_doc_txt.resolve().exists():
-            return FileResponse(
-                str(output_doc_txt.resolve()),
-                headers={"Content-Type": "text/plain; charset=utf-8"},
-                filename=f"{pid}.txt",
-            )
-
-    raise HTTPException(status_code=404)
-
-@app.get("/ocr/{pid}/docx")
-def get_doc_docx(pid: UUID, api_key: APIKey = Depends(check_api_key)):
-    if pid in documents:
-        output_doc_txt = documents[pid].output_txt
-
-        if output_doc_txt.resolve().exists():
-            doc = DocxDocument()
-            with open(str(output_doc_txt.resolve()), 'r', encoding='utf-8') as txt_file:
-                for line in txt_file:
-                    doc.add_paragraph(line.strip())
-
-            docx_content = BytesIO()
-            doc.save(docx_content)
-
-            docx_content.seek(0)
-
-            return StreamingResponse(
-                content=docx_content,
-                media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                headers={"Content-Disposition": f"attachment; filename={pid}.docx"},
-            )
-
-    raise HTTPException(status_code=404)
-
-from fastapi import Query
-
-@app.get("/search", response_model=list)
-def search_files(query: str = Query(..., title="Search Query"), api_key: APIKey = Depends(check_api_key)):
-    matching_pdfs = []
-
-    for doc in documents.values():
-        if doc.output_txt.resolve().exists():
-            with open(str(doc.output_txt.resolve()), 'r', encoding='utf-8') as txt_file:
-                txt_content = txt_file.read()
-                if query.lower() in txt_content.lower():
-                    matching_pdfs.append({"pid": str(doc.pid), "pdf_filename": f"{doc.pid}.pdf"})
-
-    return matching_pdfs
-
-@app.delete("/ocr/{pid}")
-def delete_doc(pid: UUID, api_key: APIKey = Depends(check_api_key)):
-    if pid in documents:
-        # Xoá tệp đầu ra và các tệp liên quan khác nếu cần
-        output_doc = documents[pid].output
-        output_doc_json = documents[pid].output_json
-        output_doc_txt = documents[pid].output_txt
-
-        # Kiểm tra và xoá tệp nếu tồn tại
-        for file_path in [output_doc, output_doc_json, output_doc_txt]:
-            if file_path.resolve().exists():
-                file_path.unlink()
-
-        # Xoá tài liệu khỏi danh sách
-        del documents[pid]
-
-        return {"status": "success", "message": f"Document {pid} deleted successfully"}
-
-    raise HTTPException(status_code=404, detail="Document not found")
-
-
 @app.post(
     "/ocr", response_model=Document, status_code=200,
 )
@@ -196,8 +107,8 @@ async def ocr(
     background_tasks: BackgroundTasks,
     lang: Optional[Set[str]] = Query([Lang.eng]),
     file: UploadFile = File(...),
+    file_name: str = Form(...),
     api_key: APIKey = Depends(check_api_key),
-
 ):
     pid = uuid.uuid4()
     now = datetime.now()
@@ -209,6 +120,7 @@ async def ocr(
     output_file = workdir / Path(f"o_{filename}.pdf")
     output_file_json = workdir / Path(f"o_{filename}.json")
     output_file_txt = workdir / Path(f"o_{filename}.txt")
+
     documents[pid] = Document.parse_obj(
         {
             "pid": pid,
@@ -220,6 +132,7 @@ async def ocr(
             "status": "received",
             "created": now,
             "expire": expire,
+            "file_name": file_name,
         }
     )
     documents[pid].save_state()

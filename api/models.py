@@ -27,6 +27,7 @@ class Document(BaseModel):
     result: Optional[str] = None
     code: Optional[int] = None
     created: datetime
+    file_name: str
     processing: Optional[datetime] = None
     expire: datetime
     finished: Optional[datetime] = None
@@ -42,10 +43,12 @@ class Document(BaseModel):
             else str(self.output_txt.absolute())
         )
         input_path = (
-            special_win_wslpath(self.input) if wsl else str(self.input.absolute())
+            special_win_wslpath(self.input) if wsl else str(
+                self.input.absolute())
         )
         output_path = (
-            special_win_wslpath(self.output) if wsl else str(self.output.absolute())
+            special_win_wslpath(self.output) if wsl else str(
+                self.output.absolute())
         )
         try:
             output = subprocess.check_output(
@@ -78,4 +81,3 @@ class Document(BaseModel):
     def save_state(self):
         with open(self.output_json, "w") as ff:
             ff.write(self.json())
-
