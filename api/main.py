@@ -153,6 +153,22 @@ def get_doc_docx(pid: UUID, api_key: APIKey = Depends(check_api_key)):
 
     raise HTTPException(status_code=404)
 
+from fastapi import Query
+
+@app.get("/search", response_model=list)
+def search_files(query: str = Query(..., title="Search Query"), api_key: APIKey = Depends(check_api_key)):
+    matching_pdfs = []
+
+    for doc in documents.values():
+        if doc.output_txt.resolve().exists():
+            with open(str(doc.output_txt.resolve()), 'r', encoding='utf-8') as txt_file:
+                txt_content = txt_file.read()
+                if query.lower() in txt_content.lower():
+                    matching_pdfs.append({"pid": str(doc.pid), "pdf_filename": f"{doc.pid}.pdf"})
+
+    return matching_pdfs
+
+
 @app.post(
     "/ocr", response_model=Document, status_code=200,
 )
