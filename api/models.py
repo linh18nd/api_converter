@@ -30,6 +30,7 @@ class Document(BaseModel):
     processing: Optional[datetime] = None
     expire: datetime
     finished: Optional[datetime] = None
+    file_name: Optional[str] = None
 
     def ocr(self, wsl: bool = False):
         self.status = "processing"
@@ -62,6 +63,7 @@ class Document(BaseModel):
                 stderr=subprocess.STDOUT,
                 shell=True,
             )
+
         except subprocess.CalledProcessError as e:
             self.status = "error"
             self.code = e.returncode
