@@ -15,6 +15,9 @@ class Lang(str, Enum):
     eng = "eng"
     vie = "vie"
 
+def set_to_string(lang_set: Set[Lang]) -> str:
+    return ', '.join(lang.value for lang in lang_set)
+
 
 class Document(BaseModel):
     pid: UUID

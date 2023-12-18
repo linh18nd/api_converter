@@ -1,0 +1,26 @@
+services:
+  pythonapp:
+    build: .
+    image: linh18/api_converter:2.0.1
+    volumes:
+      - ./python:/api
+    command: sh -c "sleep 10s; uvicorn api.main:app --host 0.0.0.0 --port 80 --reload"
+    ports:
+      - '0.0.0.0:80:80'
+    depends_on:
+      - mysql
+
+  mysql:
+    image: mysql:latest
+    restart: always
+    volumes:
+      - mysqlvol:/var/lib/mysql/
+      - ./init/:/docker-entrypoint-initdb.d/
+    environment:
+      MYSQL_DATABASE: 'documents'
+      MYSQL_ROOT_PASSWORD: 'linh2002'
+    ports:
+      - '0.0.0.0:3307:3306'
+
+volumes:
+  mysqlvol:

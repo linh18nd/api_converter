@@ -25,3 +25,11 @@ pip install -r requirements.txt
 pip install -r requirements_dev.txt
 uvicorn main:app --reload
 ```
+
+
+echo $PYTHONPATH
+PYTHONPATH=/Users/linhth1/Documents/python/api_converter
+
+docker buildx build -t linh18/api_converter:latest --push --platform linux/amd64 .
+
+docker-compose up
