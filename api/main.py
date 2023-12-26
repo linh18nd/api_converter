@@ -164,17 +164,21 @@ def search_files(query: str = Query(..., title="Search Query"), api_key: APIKey 
             with open(str(doc.output_txt.resolve()), 'r', encoding='utf-8') as txt_file:
                 txt_content = txt_file.read()
                 if query.lower() in txt_content.lower():
-                    matching_pdfs.append({"pid": str(doc.pid), "pdf_filename": f"{doc.file_name}.pdf"})
+                    matching_pdfs.append({"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
 
     return matching_pdfs
 
-@app.get("/ocr/all", response_model=list)
-def get_all_docs(api_key: APIKey = Depends(check_api_key)):
-    all_documents = [
-        {"pid": str(doc.pid), "filename": doc.file_name} for doc in documents.values()
-    ]
 
-    return all_documents
+@app.get("/documents", response_model=list)
+def get_all_documents(api_key: APIKey = Depends(check_api_key)):
+    all_docs = []
+
+    for doc in documents.values():
+        all_docs.append({"pid": str(doc.pid), "file_name": doc.file_name, "status": doc.status})
+
+    return all_docs
+
+
 
 @app.delete("/ocr/{pid}")
 def delete_doc(pid: UUID, api_key: APIKey = Depends(check_api_key)):
