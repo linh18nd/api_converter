@@ -183,13 +183,6 @@ def get_all_documents(api_key: APIKey = Depends(check_api_key)):
 @app.delete("/ocr/{pid}")
 def delete_doc(pid: UUID, api_key: APIKey = Depends(check_api_key)):
     if pid in documents:
-        output_doc = documents[pid].output
-        output_doc_json = documents[pid].output_json
-        output_doc_txt = documents[pid].output_txt
-
-        for file_path in [output_doc, output_doc_json, output_doc_txt]:
-            if file_path.resolve().exists():
-                file_path.unlink()
 
         del documents[pid]
 
