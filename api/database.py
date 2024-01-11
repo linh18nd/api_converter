@@ -57,6 +57,11 @@ async def execute(query):
 async def fetch_all(query):
     return await database.fetch_all(query)
 
+async def fetch_one(query):
+    return await database.fetch_one(query)
+    
 async def get_all_documents():
     query = select(DBDocument)
     return await database.fetch_all(query)
+
+
