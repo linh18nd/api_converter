@@ -11,7 +11,7 @@ from typing import Optional, Dict, Set
 from uuid import UUID
 from fastapi.responses import FileResponse, StreamingResponse
 from docx import Document as DocxDocument
-
+from api.database import connect, disconnect, Base, execute
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import (
     FastAPI,
@@ -28,6 +28,7 @@ from fastapi.openapi.models import APIKey
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from starlette.status import HTTP_403_FORBIDDEN
+from api import database
 from api.models import Document, Lang
 
 
@@ -35,6 +36,7 @@ from api.models import Document, Lang
 
 
 from api.settings import config
+from api.database import DBDocument
 from api.tools import save_upload_file
 
 logger = logging.getLogger("gunicorn.error")
@@ -59,13 +61,41 @@ expiration_delta = timedelta(hours=config.document_expire_hour)
 if not workdir.exists():
     workdir.mkdir()
 
+def fetch_existing_documents_metadata() -> Dict[UUID, Document]:
+    documents = {}
+    for file in workdir.glob("o_*.json"):
+        doc = Document.parse_file(file)
+        documents[doc.pid] = doc
+    return documents
 
+   
+    
 
 async def do_ocr(_doc: Document):
     pool_ocr.acquire()
     _doc.ocr(config.enable_wsl_compat)
     pool_ocr.release()
     
+def get_db():
+    db = execute(DBDocument.__table__.metadata.tables['documents'].select())
+    return db
+
+@app.get("/")
+async def read_root():
+    return {"message": "Hello, World!"}
+
+@app.on_event("startup")
+async def startup_db_client():
+    await database.connect()
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    await database.disconnect()
+    
+@app.on_event("startup")
+async def startup_event():
+    global documents
+    documents = fetch_existing_documents_metadata()
 
 api_key_header = APIKeyHeader(name="X-API-KEY")
 
@@ -155,23 +185,29 @@ def get_doc_docx(pid: UUID, api_key: APIKey = Depends(check_api_key)):
 
 from fastapi import Query
 
+from typing import List
+
 @app.get("/search", response_model=list)
-def search_files(query: str = Query(..., title="Search Query"), api_key: APIKey = Depends(check_api_key)):
+def search_files(queries: List[str] = Query(..., title="Search Queries"), api_key: APIKey = Depends(check_api_key)):
     matching_pdfs = []
 
     for doc in documents.values():
         if doc.output_txt.resolve().exists():
             with open(str(doc.output_txt.resolve()), 'r', encoding='utf-8') as txt_file:
                 txt_content = txt_file.read()
-                if query.lower() in txt_content.lower():
+                
+                # Kiểm tra xem tất cả các query đều xuất hiện trong nội dung văn bản
+                if all(query.lower() in txt_content.lower() for query in queries):
                     matching_pdfs.append({"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
 
     return matching_pdfs
 
 
+
 @app.get("/documents", response_model=list)
 def get_all_documents(api_key: APIKey = Depends(check_api_key)):
     all_docs = []
+    documents = fetch_existing_documents_metadata()
 
     for doc in documents.values():
         all_docs.append({"pid": str(doc.pid), "file_name": doc.file_name, "status": doc.status})
@@ -189,6 +225,12 @@ def delete_doc(pid: UUID, api_key: APIKey = Depends(check_api_key)):
         return {"status": "success", "message": f"Document {pid} deleted successfully"}
 
     raise HTTPException(status_code=404, detail="Document not found")
+
+@app.get("/documentsssss", response_model=list)
+async def get_documents():
+    documents = await database.fetch_all(DBDocument.__table__.select())
+    result = [{"pid": doc.pid, "file_name": doc.file_name, "lang": doc.lang} for doc in documents]
+    return result
 
 
 @app.post(
@@ -213,6 +255,22 @@ async def ocr(
     output_file = workdir / Path(f"o_{filename}.pdf")
     output_file_json = workdir / Path(f"o_{filename}.json")
     output_file_txt = workdir / Path(f"o_{filename}.txt")
+    
+    await database.execute(
+    DBDocument.__table__.insert().values(
+        pid=str(pid),  
+        lang=",".join(lang),  
+        status="received",
+        input=str(input_file.resolve()),
+        output=str(output_file.resolve()),
+        output_json=str(output_file_json.resolve()),
+        output_txt=str(output_file_txt.resolve()),
+        created=now,
+        expire=expire,
+        file_name=filename,
+    )
+)
+
     documents[pid] = Document.parse_obj(
         {
             "pid": pid,

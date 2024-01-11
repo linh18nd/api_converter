@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  fastapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app
+    depends_on:
+      - sqlite
+
+  sqlite:
+    image: python:3.9
+    volumes:
+      - ./data:/data
+    command: sh -c "echo 'CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, name TEXT NOT NULL);' | sqlite3 /data/test.db"
