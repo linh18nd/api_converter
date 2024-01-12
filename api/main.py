@@ -228,7 +228,7 @@ async def search_files(
 
                 # Evaluate each group in the parsed query
                 if any(evaluate_condition(group, txt_content) for group in parsed_query):
-                    matching_pdfs.append({"pid": str(doc.pid), "file_name": {doc.file_name} + ".pdf"})
+                    matching_pdfs.append({"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
 
     return matching_pdfs
 
