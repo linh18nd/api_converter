@@ -7,8 +7,9 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import BoundedSemaphore
-from typing import Optional, Dict, Set
+from typing import Optional, Dict, Set, Union
 from uuid import UUID
+from fastapi.params import Form
 from fastapi.responses import FileResponse, StreamingResponse
 from docx import Document as DocxDocument
 from api.database import connect, disconnect, Base, execute
@@ -178,21 +179,59 @@ async def get_doc_docx(pid: UUID, api_key: APIKey = Depends(check_api_key)):
     raise HTTPException(status_code=404)
 
 
+# @app.get("/search", response_model=list)
+# async def search_files(queries: List[str] = Query(..., title="Search Queries"), api_key: APIKey = Depends(check_api_key)):
+#     docs = await database.fetch_all(DBDocument.__table__.select())
+#     matching_pdfs = []
+
+#     for doc in docs:
+#         path = Path(doc.output_txt)
+#         if path.exists():
+#             with open(str(doc.output_txt), 'r', encoding='utf-8') as txt_file:
+#                 txt_content = txt_file.read()
+                
+#                 if all(query.lower() in txt_content.lower() for query in queries):
+#                     matching_pdfs.append({"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
+
+#     return matching_pdfs
+
+
+def parse_search_query(query: str) -> List[Union[List[str], str]]:
+    result = []
+    groups = query.split("||")
+    for group in groups:
+        and_conditions = group.split("&&")
+        if len(and_conditions) > 1:
+            result.append(and_conditions)
+        else:
+            result.append([group])
+    return result
+
+def evaluate_condition(condition: List[str], txt_content: str) -> bool:
+    return all(query.strip().lower() in txt_content.lower() for query in condition)
+
 @app.get("/search", response_model=list)
-async def search_files(queries: List[str] = Query(..., title="Search Queries"), api_key: APIKey = Depends(check_api_key)):
+async def search_files(
+    search_query: str = Query(..., title="Search Query"),
+    api_key: APIKey = Depends(check_api_key)
+):
     docs = await database.fetch_all(DBDocument.__table__.select())
     matching_pdfs = []
+
+    parsed_query = parse_search_query(search_query)
 
     for doc in docs:
         path = Path(doc.output_txt)
         if path.exists():
             with open(str(doc.output_txt), 'r', encoding='utf-8') as txt_file:
                 txt_content = txt_file.read()
-                
-                if all(query.lower() in txt_content.lower() for query in queries):
-                    matching_pdfs.append({"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
+
+                # Evaluate each group in the parsed query
+                if any(evaluate_condition(group, txt_content) for group in parsed_query):
+                    matching_pdfs.append({"pid": str(doc.pid), "file_name": {doc.file_name} + ".pdf"})
 
     return matching_pdfs
+
 
 
 @app.delete("/ocr/{pid}")
@@ -221,13 +260,13 @@ async def ocr(
     lang: Optional[Set[str]] = Query([Lang.eng]),
     file: UploadFile = File(...),
     api_key: APIKey = Depends(check_api_key),
-    file_name: Optional[str] = Query(None),
+    file_name: Optional[str] = Form(None),
 
 ):
     pid = uuid.uuid4()
     now = datetime.now()
     expire = now + expiration_delta
-    filename = f"{file_name or pid}"
+    filename = f"{pid}"
     
 
     input_file = workdir / Path(f"i_{filename}.pdf")
@@ -247,7 +286,7 @@ async def ocr(
         output_txt=str(output_file_txt.resolve()),
         created=now,
         expire=expire,
-        file_name=filename,
+        file_name=file_name or file.file,
     )
 )
 
@@ -262,7 +301,7 @@ async def ocr(
         output_txt=output_file_txt,
         created=now,
         expire=expire,
-        file_name=filename,
+        file_name=file_name or file.file,
     )
     
     await do_ocr(document)

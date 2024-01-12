@@ -1,19 +1,20 @@
-version: '3.8'
+version: '3'
 
 services:
-  fastapi:
+  app:
     build:
       context: .
       dockerfile: Dockerfile
+    environment:
+      - DATABASE_URL=sqlite:///./test.db
     ports:
-      - "8000:8000"
+      - "8080:8080"
     volumes:
-      - ./app:/app
+      - /workdir
     depends_on:
-      - sqlite
+      - db
 
-  sqlite:
-    image: python:3.9
+  db:
+    image: "sqlite:latest"
     volumes:
-      - ./data:/data
-    command: sh -c "echo 'CREATE TABLE IF NOT EXISTS items (id INTEGER PRIMARY KEY, name TEXT NOT NULL);' | sqlite3 /data/test.db"
+      - /Users/linhth1/Documents/share_data:/app/test.db
