@@ -7,8 +7,9 @@ import uuid
 from datetime import datetime, timedelta
 from pathlib import Path
 from threading import BoundedSemaphore
-from typing import Optional, Dict, Set
+from typing import Optional, Dict, Set, Union
 from uuid import UUID
+from fastapi.params import Form
 from fastapi.responses import FileResponse, StreamingResponse
 from docx import Document as DocxDocument
 from api.database import connect, disconnect, Base, execute
@@ -37,7 +38,6 @@ from fastapi import Query
 from typing import List
 
 
-
 from api.settings import config
 from api.database import DBDocument
 from api.tools import save_upload_file
@@ -61,6 +61,7 @@ workdir = config.workdir
 script_directory = Path(os.path.dirname(os.path.abspath(__file__))).resolve()
 expiration_delta = timedelta(hours=config.document_expire_hour)
 
+
 def delete_data(doc: DBDocument):
     output_path = Path(doc.output)
     output_json_path = Path(doc.output_json)
@@ -74,25 +75,27 @@ def delete_data(doc: DBDocument):
         output_txt_path.unlink()
     if input_path.exists():
         input_path.unlink()
-        
+
 
 if not workdir.exists():
     workdir.mkdir()
 
-    
 
 async def do_ocr(_doc: Document):
     pool_ocr.acquire()
     _doc.ocr(config.enable_wsl_compat)
     pool_ocr.release()
-    
+
+
 def get_db():
     db = execute(DBDocument.__table__.metadata.tables['documents'].select())
     return db
 
+
 @app.on_event("startup")
 async def startup_db_client():
     await database.connect()
+
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
@@ -109,6 +112,7 @@ async def check_api_key(x_api_key: str = Security(api_key_header)):
             status_code=HTTP_403_FORBIDDEN, detail="Could not validate credentials"
         )
 
+
 @app.get("/status", include_in_schema=False)
 def status():
     ocrmypdf = subprocess.check_output(
@@ -116,9 +120,11 @@ def status():
     )
     return {"status": "ok", "version_ocr": ocrmypdf.strip()}
 
+
 @app.get("/ocr/{pid}/pdf")
 async def get_doc_pdf(pid: UUID, api_key: APIKey = Depends(check_api_key)):
-    query = DBDocument.__table__.select().where(DBDocument.__table__.c.pid == str(pid))
+    query = DBDocument.__table__.select().where(
+        DBDocument.__table__.c.pid == str(pid))
     doc = await database.fetch_one(query)
 
     if doc:
@@ -133,9 +139,11 @@ async def get_doc_pdf(pid: UUID, api_key: APIKey = Depends(check_api_key)):
 
     raise HTTPException(status_code=404, detail="Document not found")
 
+
 @app.get("/ocr/{pid}/txt")
 async def get_doc_txt(pid: UUID, api_key: APIKey = Depends(check_api_key)):
-    query = DBDocument.__table__.select().where(DBDocument.__table__.c.pid == str(pid))
+    query = DBDocument.__table__.select().where(
+        DBDocument.__table__.c.pid == str(pid))
     doc = await database.fetch_one(query)
 
     if doc:
@@ -150,9 +158,11 @@ async def get_doc_txt(pid: UUID, api_key: APIKey = Depends(check_api_key)):
 
     raise HTTPException(status_code=404, detail="Document not found")
 
+
 @app.get("/ocr/{pid}/docx")
 async def get_doc_docx(pid: UUID, api_key: APIKey = Depends(check_api_key)):
-    query = DBDocument.__table__.select().where(DBDocument.__table__.c.pid == str(pid))
+    query = DBDocument.__table__.select().where(
+        DBDocument.__table__.c.pid == str(pid))
     doc = await database.fetch_one(query)
 
     if doc:
@@ -172,32 +182,74 @@ async def get_doc_docx(pid: UUID, api_key: APIKey = Depends(check_api_key)):
             return StreamingResponse(
                 content=docx_content,
                 media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                headers={"Content-Disposition": f"attachment; filename={pid}.docx"},
+                headers={
+                    "Content-Disposition": f"attachment; filename={pid}.docx"},
             )
 
     raise HTTPException(status_code=404)
 
 
+# @app.get("/search", response_model=list)
+# async def search_files(queries: List[str] = Query(..., title="Search Queries"), api_key: APIKey = Depends(check_api_key)):
+#     docs = await database.fetch_all(DBDocument.__table__.select())
+#     matching_pdfs = []
+
+#     for doc in docs:
+#         path = Path(doc.output_txt)
+#         if path.exists():
+#             with open(str(doc.output_txt), 'r', encoding='utf-8') as txt_file:
+#                 txt_content = txt_file.read()
+
+#                 if all(query.lower() in txt_content.lower() for query in queries):
+#                     matching_pdfs.append({"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
+
+#     return matching_pdfs
+
+
+def parse_search_query(query: str) -> List[Union[List[str], str]]:
+    result = []
+    groups = query.split("||")
+    for group in groups:
+        and_conditions = group.split("&&")
+        if len(and_conditions) > 1:
+            result.append(and_conditions)
+        else:
+            result.append([group])
+    return result
+
+
+def evaluate_condition(condition: List[str], txt_content: str) -> bool:
+    return all(query.strip().lower() in txt_content.lower() for query in condition)
+
+
 @app.get("/search", response_model=list)
-async def search_files(queries: List[str] = Query(..., title="Search Queries"), api_key: APIKey = Depends(check_api_key)):
+async def search_files(
+    search_query: str = Query(..., title="Search Query"),
+    api_key: APIKey = Depends(check_api_key)
+):
     docs = await database.fetch_all(DBDocument.__table__.select())
     matching_pdfs = []
+
+    parsed_query = parse_search_query(search_query)
 
     for doc in docs:
         path = Path(doc.output_txt)
         if path.exists():
             with open(str(doc.output_txt), 'r', encoding='utf-8') as txt_file:
                 txt_content = txt_file.read()
-                
-                if all(query.lower() in txt_content.lower() for query in queries):
-                    matching_pdfs.append({"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
+
+                # Evaluate each group in the parsed query
+                if any(evaluate_condition(group, txt_content) for group in parsed_query):
+                    matching_pdfs.append(
+                        {"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
 
     return matching_pdfs
 
 
 @app.delete("/ocr/{pid}")
 async def delete_doc(pid: UUID, api_key: APIKey = Depends(check_api_key)):
-    query = DBDocument.__table__.select().where(DBDocument.__table__.c.pid == str(pid))
+    query = DBDocument.__table__.select().where(
+        DBDocument.__table__.c.pid == str(pid))
     doc = await database.fetch_one(query)
     if doc:
         delete_data(doc)
@@ -209,7 +261,8 @@ async def delete_doc(pid: UUID, api_key: APIKey = Depends(check_api_key)):
 @app.get("/documents", response_model=list)
 async def get_documents(api_key: APIKey = Depends(check_api_key)):
     documents = await database.fetch_all(DBDocument.__table__.select())
-    result = [{"pid": doc.pid, "file_name": doc.file_name, "lang": doc.lang} for doc in documents]
+    result = [{"pid": doc.pid, "file_name": doc.file_name, "lang": doc.lang}
+              for doc in documents]
     return result
 
 
@@ -227,31 +280,14 @@ async def ocr(
     pid = uuid.uuid4()
     now = datetime.now()
     expire = now + expiration_delta
-    filename = f"{file_name or pid}"
-    
+    filename = f"{pid}"
 
     input_file = workdir / Path(f"i_{filename}.pdf")
     save_upload_file(file, input_file)
     output_file = workdir / Path(f"o_{filename}.pdf")
     output_file_json = workdir / Path(f"o_{filename}.json")
     output_file_txt = workdir / Path(f"o_{filename}.txt")
-    
-    await database.execute(
-    DBDocument.__table__.insert().values(
-        pid=str(pid),  
-        lang=",".join(lang),  
-        status="received",
-        input=str(input_file.resolve()),
-        output=str(output_file.resolve()),
-        output_json=str(output_file_json.resolve()),
-        output_txt=str(output_file_txt.resolve()),
-        created=now,
-        expire=expire,
-        file_name=filename,
-    )
-)
 
-    
     document = Document(
         pid=pid,
         lang=lang,
@@ -262,11 +298,28 @@ async def ocr(
         output_txt=output_file_txt,
         created=now,
         expire=expire,
-        file_name=filename,
+        file_name=file_name or file.file,
     )
-    
+
     await do_ocr(document)
-    
+
     document.save_state()
+    with open(str(output_file_txt), 'r', encoding='utf-8') as txt_file:
+        txt_content = txt_file.read()
+        await database.execute(
+            DBDocument.__table__.insert().values(
+                pid=str(pid),
+                lang=",".join(lang),
+                status="received",
+                input=str(input_file.resolve()),
+                output=str(output_file.resolve()),
+                output_json=str(output_file_json.resolve()),
+                output_txt=str(output_file_txt.resolve()),
+                created=now,
+                expire=expire,
+                file_name=file_name or file.file,
+                text=txt_content,
+            )
+        )
 
     return document
