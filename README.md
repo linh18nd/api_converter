@@ -26,3 +26,4 @@ pip install -r requirements_dev.txt
 uvicorn main:app --reload
 ```
 echo $PYTHONPATH
+export PYTHONPATH="/Users/linhth1/Documents/python/api_converter/api"
