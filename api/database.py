@@ -31,7 +31,7 @@ class DBDocument(Base):
     output = Column(String, nullable=False)
     output_json = Column(String, nullable=False)
     output_txt = Column(String, nullable=False)
-    result = Column(String, nullable=True)
+    text = Column(String, nullable=True)
     created = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     processing = Column(DateTime(timezone=True), nullable=True)
     expire = Column(DateTime(timezone=True), nullable=False)
