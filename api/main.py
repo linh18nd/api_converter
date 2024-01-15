@@ -9,6 +9,7 @@ from pathlib import Path
 from threading import BoundedSemaphore
 from typing import Optional, Dict, Set, Union
 from uuid import UUID
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.params import Form
 from fastapi.responses import FileResponse, StreamingResponse
 from docx import Document as DocxDocument
@@ -90,6 +91,24 @@ async def do_ocr(_doc: Document):
 def get_db():
     db = execute(DBDocument.__table__.metadata.tables['documents'].select())
     return db
+
+
+# Định cấu hình CORS
+origins = [
+    "http://localhost",
+    "http://localhost:8080",
+    "http://localhost:8000",
+    "https://example.com",
+    "https://staging.example.com",
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"], 
+    allow_headers=["*"],
+)
 
 
 @app.on_event("startup")
