@@ -40,7 +40,7 @@ from typing import List
 
 
 from api.settings import config
-from api.database import DBDocument
+from api.database import DBDocument, User
 from api.tools import save_upload_file
 
 logger = logging.getLogger("gunicorn.error")
@@ -152,6 +152,24 @@ async def get_doc_pdf(pid: UUID, api_key: APIKey = Depends(check_api_key)):
         if path.resolve().exists():
             return FileResponse(
                 str(doc.output),
+                headers={"Content-Type": "application/pdf"},
+                filename=f"{pid}.pdf",
+            )
+
+    raise HTTPException(status_code=404, detail="Document not found")
+
+@app.get("/doc/{pid}/pdf")
+async def get_doc_pdf(pid: UUID, api_key: APIKey = Depends(check_api_key)):
+    query = DBDocument.__table__.select().where(
+        DBDocument.__table__.c.pid == str(pid))
+    doc = await database.fetch_one(query)
+
+    if doc:
+        path = Path(doc.output)
+
+        if path.resolve().exists():
+            return FileResponse(
+                str(doc.input),
                 headers={"Content-Type": "application/pdf"},
                 filename=f"{pid}.pdf",
             )
@@ -342,3 +360,43 @@ async def ocr(
         )
 
     return document
+
+
+@app.post("/signin")
+async def signIn(name: str = Form(...), password: str = Form(...), api_key: APIKey = Depends(check_api_key)):
+    users = await database.fetch_all(User.__table__.select())
+    for user in users:
+        if user.name == name and user.password == password:
+            return {"status": "success", "user": user}
+    return {"status": "failed"}
+
+
+# add user
+@app.post("/addUser")
+async def addUser(name: str = Form(...), password: str = Form(...), role: str = Form(...), api_key: APIKey = Depends(check_api_key)):
+    users = await database.fetch_all(User.__table__.select())
+    for user in users:
+        if user.name == name:
+            return {"status": "failed"}
+    await database.execute(
+        User.__table__.insert().values(
+            name=name,
+            password=password,
+            role=role,
+        )
+    )
+    return {"status": "success"}
+
+# getAll
+@app.get("/getAllUser")
+async def getAllUser(api_key: APIKey = Depends(check_api_key)):
+    users = await database.fetch_all(User.__table__.select())
+    return users
+
+
+
+# delete
+@app.delete("/deleteUser/{id}")
+async def deleteUser(id: int, api_key: APIKey = Depends(check_api_key)):
+    await database.execute(User.__table__.delete().where(User.__table__.c.id == id))
+    return Response(status_code=204, headers={"X-Status": "Deleted"})

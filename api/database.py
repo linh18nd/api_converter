@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, MetaData
 from sqlalchemy.ext.declarative import declarative_base
 from databases import Database
 from sqlalchemy import select, func
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, DateTime, Integer
 from sqlalchemy.orm import sessionmaker
 from uuid import uuid4
 
@@ -40,7 +40,18 @@ class DBDocument(Base):
 
     def __repr__(self):
         return f"<Document(pid={self.pid}, status={self.status}, ...)>"
-    
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True, nullable=False, unique=True)
+    name = Column(String, nullable=False)
+    password = Column(String, nullable=False)
+    role = Column(String, nullable=False)
+
+    def __repr__(self):
+        return f"<User(id={self.id}, name={self.name}, ...)>"
+
 Base.metadata.create_all(bind=engine)
 
 # This function will be used to connect to the database
@@ -64,4 +75,6 @@ async def get_all_documents():
     query = select(DBDocument)
     return await database.fetch_all(query)
 
-
+async def get_all_users():
+    query = select(User)
+    return await database.fetch_all(query)

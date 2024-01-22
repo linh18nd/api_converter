@@ -12,10 +12,10 @@ docker pull linh18/api_converter:release
 ## Triển khai
 ### Chạy (không cần build), mở docker và chạy lệnh sau:
 ```shell
-docker run -p "8080:8080" linh18/api_converter:release
+docker run -p "8000:8000" linh18/api_converter:release
 ```
 
-Sau đó mở browser truy cập http://127.0.0.1:8080/docs hoặc http://0.0.0.0:8080/docs để xem tài liệu API, pass = "123456"
+Sau đó mở browser truy cập http://127.0.0.1:8000/docs hoặc http://0.0.0.0:8000/docs để xem tài liệu API, pass = "123456"
 
 
 ### Developmentdocker images
@@ -26,3 +26,5 @@ pip install -r requirements_dev.txt
 uvicorn main:app --reload
 ```
 echo $PYTHONPATH
+export PYTHONPATH="/Users/linhth1/Documents/python/api_converter"
+
