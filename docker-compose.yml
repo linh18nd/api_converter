@@ -2,11 +2,11 @@ version: '3'
 
 services:
   flutter-web:
-    image: linh18/web:latest
+    image: linh18/web:release
     ports:
       - "8080:80"
 
   fastapi:
-    image: linh18/api_converter:latest
+    image: linh18/api_converter:release
     ports:
       - "8000:8000"

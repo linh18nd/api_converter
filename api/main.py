@@ -270,15 +270,11 @@ async def search_files(
     parsed_query = parse_search_query(search_query)
 
     for doc in docs:
-        path = Path(doc.output_txt)
-        if path.exists():
-            with open(str(doc.output_txt), 'r', encoding='utf-8') as txt_file:
-                txt_content = txt_file.read()
-
-                # Evaluate each group in the parsed query
-                if any(evaluate_condition(group, txt_content) for group in parsed_query):
-                    matching_pdfs.append(
-                        {"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
+        text = doc.text
+        if text:
+            if any(evaluate_condition(condition, text) for condition in parsed_query):
+                matching_pdfs.append(
+                    {"pid": str(doc.pid), "file_name": f"{doc.file_name}.pdf"})
 
     return matching_pdfs
 
