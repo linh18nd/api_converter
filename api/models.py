@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel
 
 from api.settings import config
-from api.tools import special_win_wslpath
+from api.tools import ocr_pdf, special_win_wslpath
 
 
 class Lang(str, Enum):
@@ -43,25 +43,21 @@ class Document(BaseModel):
             else str(self.output_txt.absolute())
         )
         input_path = (
-            special_win_wslpath(self.input) if wsl else str(self.input.absolute())
+            special_win_wslpath(self.input) if wsl else str(
+                self.input.absolute())
         )
         output_path = (
-            special_win_wslpath(self.output) if wsl else str(self.output.absolute())
+            special_win_wslpath(self.output) if wsl else str(
+                self.output.absolute())
         )
         try:
-            output = subprocess.check_output(
-                " ".join(
-                    [
-                        config.base_command_ocr,
-                        config.base_command_option,
-                        f"-l {'+'.join([l.value for l in self.lang])}",
-                        f"--sidecar {output_txt_path}",
-                        input_path,
-                        output_path,
-                    ]
-                ),
-                stderr=subprocess.STDOUT,
-                shell=True,
+            output = ocr_pdf(
+                input_path,
+                output_path,
+                output_txt_path,
+                self.lang,
+                config.base_command_ocr,
+                config.base_command_option,
             )
 
         except subprocess.CalledProcessError as e:
@@ -80,4 +76,3 @@ class Document(BaseModel):
     def save_state(self):
         with open(self.output_json, "w") as ff:
             ff.write(self.json())
-
